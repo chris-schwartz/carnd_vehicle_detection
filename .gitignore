@@ -1,0 +1,6 @@
+.idea/
+non-vehicles/
+vehicles/
+__MACOSX/
+
+*.swp

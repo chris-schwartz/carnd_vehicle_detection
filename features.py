@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
+from copy import deepcopy
 from mpl_toolkits.mplot3d import Axes3D
 
 import glob
@@ -72,29 +73,44 @@ from skimage.feature import hog
 import time
 
 
-class FeatureExtractor:
-    def extract_features(self, feature_images, colorspace='RGB', spatial_size=(32, 32), hist_bins=32,
-                         hist_range=(0, 256), orientations=9, hog_pixels_per_cell=8, hog_cells_per_block=2,
-                         hog_visualize=False, feature_vector_hog=True,
-                         use_hog=True, use_bin_spatial=True, use_color_hist=True ):
+class FeatureExtractor(Thread):
+    def __init__(self, colorspace='RGB', spatial_size=(32, 32), hist_bins=32,
+                 orientations=9, hog_pixels_per_cell=8, hog_cells_per_block=2,
+                 feature_vector_hog=True, use_hog=True, use_bin_spatial=True, use_color_hist=True):
+        Thread.__init__(self)
+        self.features = []
+
+        self.colorspace = colorspace
+        self.spatial_size = spatial_size
+        self.hist_bins = hist_bins
+        self.orientations = orientations
+        self.hog_pixels_per_cell = hog_pixels_per_cell
+        self.hog_cells_per_block = hog_cells_per_block
+        self.feature_vector_hog = feature_vector_hog
+        self.use_hog = use_hog
+        self.use_bin_spatial = use_bin_spatial
+        self.use_color_hist = use_color_hist
+
+    def get_features(self, feature_images):
         self.features = []
         for src_img in feature_images:
-            feature_img = self.convert_colorspace(src_img, colorspace)
+            feature_img = self.convert_colorspace(src_img, self.colorspace)
 
-            if use_bin_spatial:
-                spatial_features = self.bin_spatial(feature_img, size=spatial_size)
+            if self.use_bin_spatial:
+                spatial_features = self.bin_spatial(feature_img, size=self.spatial_size)
             else:
                 spatial_features = []
 
-            if use_color_hist:
-                hist_features = self.color_hist(feature_img, nbins=hist_bins, bins_range=hist_range)
+            if self.use_color_hist:
+                hist_features = self.color_hist(feature_img, nbins=self.hist_bins)
             else:
-                use_color_hist = []
+                hist_features = []
 
-            if use_hog:
-                hog_features = self.hog_features(feature_img, orientations=orientations,
-                                                 pixels_per_cell=hog_pixels_per_cell, cells_per_block=hog_cells_per_block,
-                                                 feature_vector=feature_vector_hog)
+            if self.use_hog:
+                hog_features = self.hog_features(feature_img, orientations=self.orientations,
+                                                 pixels_per_cell=self.hog_pixels_per_cell,
+                                                 cells_per_block=self.hog_cells_per_block,
+                                                 feature_vector=self.feature_vector_hog)
             else:
                 hog_features = []
 
@@ -102,6 +118,7 @@ class FeatureExtractor:
             self.features.append(feature)
 
         return self.features
+
 
     @staticmethod
     def bin_spatial(img, size=(32, 32)):
@@ -111,11 +128,11 @@ class FeatureExtractor:
         return features
 
     @staticmethod
-    def color_hist(img, nbins=32, bins_range=(0.256)):
+    def color_hist(img, nbins=32):
         # Compute the histogram of the image channels separately
-        ch1_hist = np.histogram(img[:, :, 0], bins=nbins, range=bins_range)
-        ch2_hist = np.histogram(img[:, :, 1], bins=nbins, range=bins_range)
-        ch3_hist = np.histogram(img[:, :, 2], bins=nbins, range=bins_range)
+        ch1_hist = np.histogram(img[:, :, 0], bins=nbins)
+        ch2_hist = np.histogram(img[:, :, 1], bins=nbins)
+        ch3_hist = np.histogram(img[:, :, 2], bins=nbins)
 
         # Generating bin centers
         bin_edges = ch1_hist[1]
@@ -193,8 +210,8 @@ class SupportVectorClassifier:
         X = np.vstack((vehicle_features, non_vehicle_features))
         X = X.astype(np.float64)
 
-        X_scaler = StandardScaler().fit(X)
-        X = X_scaler.transform(X)
+        self.scaler = StandardScaler().fit(X)
+        X = self.scaler.transform(X)
 
         # randomize features/labels
         self.X, self.y = shuffle(X, y)
@@ -213,19 +230,23 @@ class SupportVectorClassifier:
 
         return self.svc.score(X_test, y_test)
 
+    def predict(self, features):
+        scaled_features = self.scaler.transform(np.array(features).reshape(1, -1))
+        return self.svc.predict(scaled_features)
+
 
 class ImageSampler:
     def __init__(self, img_shape):
 
         # initialize windows, should be able to reuse as long as image shape is the same for each image
-        windows = self.slide_window(img_shape, x_start_stop=[50, None], y_start_stop=[375, 500],
-                                    xy_window=(64, 64), xy_overlap=(0.4, 0.4))
-        windows += self.slide_window(img_shape, x_start_stop=[50, None], y_start_stop=[300, 600],
-                                     xy_window=(150, 150), xy_overlap=(0.65, 0.65))
-        windows += self.slide_window(img_shape, x_start_stop=[None, None], y_start_stop=[300, 700],
-                                     xy_window=(225, 225), xy_overlap=(0.75, 0.75))
-        windows += self.slide_window(img_shape, x_start_stop=[None, None], y_start_stop=[300, 900],
-                                     xy_window=(300, 300), xy_overlap=(0.75, 0.75))
+        windows = self.slide_window(img_shape, x_start_stop=[50, None], y_start_stop=[400, 500],
+                                    xy_window=(64, 64), xy_overlap=(0.3, 0.3))
+        windows += self.slide_window(img_shape, x_start_stop=[50, None], y_start_stop=[350, 600],
+                                     xy_window=(128, 128), xy_overlap=(0.75, 0.75))
+        windows += self.slide_window(img_shape, x_start_stop=[20, None], y_start_stop=[350, 700],
+                                     xy_window=(175, 175), xy_overlap=(0.7, 0.7))
+
+
         self.windows = windows
 
     def sample_image(self, img, sample_shape=(64, 64)):
@@ -234,7 +255,7 @@ class ImageSampler:
             samples_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], sample_shape)
             samples.append(samples_img)
 
-        return samples
+        return samples, self.windows
 
     def slide_window(self, img_shape, x_start_stop=[None, None], y_start_stop=[None, None],
                      xy_window=(64, 64), xy_overlap=(0.5, 0.5)):

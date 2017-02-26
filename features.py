@@ -119,7 +119,6 @@ class FeatureExtractor(Thread):
 
         return self.features
 
-
     @staticmethod
     def bin_spatial(img, size=(32, 32)):
         # Resize and use cv2.resize().ravel() to create the feature vector
@@ -240,12 +239,13 @@ class ImageSampler:
 
         # initialize windows, should be able to reuse as long as image shape is the same for each image
         windows = self.slide_window(img_shape, x_start_stop=[50, None], y_start_stop=[400, 500],
-                                    xy_window=(64, 64), xy_overlap=(0.3, 0.3))
+                                    xy_window=(64, 64), xy_overlap=(0.5, 0.5))
         windows += self.slide_window(img_shape, x_start_stop=[50, None], y_start_stop=[350, 600],
                                      xy_window=(128, 128), xy_overlap=(0.75, 0.75))
-        windows += self.slide_window(img_shape, x_start_stop=[20, None], y_start_stop=[350, 700],
-                                     xy_window=(175, 175), xy_overlap=(0.7, 0.7))
-
+        windows += self.slide_window(img_shape, x_start_stop=[25, None], y_start_stop=[350, 650],
+                                     xy_window=(180, 180), xy_overlap=(0.8, 0.8))
+        windows += self.slide_window(img_shape, x_start_stop=[None, None], y_start_stop=[350, 700],
+                                     xy_window=(225, 225), xy_overlap=(0.8, 0.8))
 
         self.windows = windows
 
@@ -297,3 +297,47 @@ class ImageSampler:
                 window_list.append(((startx, starty), (endx, endy)))
 
         return window_list
+
+from scipy.ndimage.measurements import label
+class HeatMapFilter:
+    def __init__(self):
+        self.heatmap = None
+
+    def filter_boxes(self, image_shape, boxes, threshold=2):
+        # if self.heatmap is None:
+        self.heatmap = np.zeros(image_shape, dtype=np.float)
+
+        # self.heatmap = np.zeros(image_shape, dtype=np.float)
+
+        for box in boxes:
+            self.heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1.0
+
+        self.apply_threshold(threshold)
+
+        labels = label(self.heatmap)
+
+        labeled_boxes = self.get_labeled_boxes(labels)
+        # self.heatmap *= 0.25
+
+        return labeled_boxes
+
+    def apply_threshold(self, threshold=1):
+        # Zero out pixels below the threshold
+        self.heatmap[self.heatmap <= threshold] = 0
+
+    @staticmethod
+    def get_labeled_boxes(labels):
+        boxes = []
+        # Iterate through all detected cars
+        for car_number in range(1, labels[1] + 1):
+            # Find pixels with each car_number label value
+            nonzero = (labels[0] == car_number).nonzero()
+            # Identify x and y values of those pixels
+            nonzeroy = np.array(nonzero[0])
+            nonzerox = np.array(nonzero[1])
+            # Define a bounding box based on min/max x and y
+            bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+            boxes.append(bbox)
+
+        # Return the image
+        return boxes

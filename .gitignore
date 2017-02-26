@@ -4,6 +4,8 @@ vehicles/
 __MACOSX/
 __pycache__/
 .ipynb_checkpoints/
+project_video_images/
+scaling_windows/
 
 *.swp
 *.p

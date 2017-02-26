@@ -1,12 +1,14 @@
 import time
 
+import cv2
+
 from features import DataLoader, SupportVectorClassifier, ImageSampler
 from features import FeatureExtractor
 from multiprocessing import Process
 import numpy as np
 
 
-class VehicleDetectionPipline:
+class VehicleDetectionPipeline:
     def __init__(self):
         self.vehicle_features = []
         self.non_vehicle_features = []
@@ -53,14 +55,48 @@ class VehicleDetectionPipline:
         self.classifier = SupportVectorClassifier(self.vehicle_features, self.non_vehicle_features)
         score = self.classifier.train_and_score(test_size=test_size)
         print("Finished training in", round(time.time() - start),
-              "seconds with %{:3.3f} accuracy.".format(score * 100.0))
+              "seconds with {:3.3f}% accuracy.".format(score * 100.0))
 
-    def detect_vehicles_in_image(self, img):
-        sampler = ImageSampler(img.shape)
+    def detect_vehicles(self, image, return_boxes=True, return_images=False):
+        start = time.time()
+        car_images, boxes = [], []
+
+        # get samples from image
+        sampler = ImageSampler(img_shape=image.shape)
+        samples, windows = sampler.sample_image(image)
+
+        # get features for sample image
+        samples_features = self.feature_extractor.get_features(samples)
+
+        # determine if sample is a car image
+        for idx, feature_sample in enumerate(samples_features):
+            prediction = self.classifier.predict(feature_sample)
+
+            # if car was detected in sample add to detected car images/boxes
+            if prediction == 1:
+                if return_images:
+                    car_images.append(samples[idx])
+                if return_boxes:
+                    boxes.append(windows[idx])
+
+        print("Finished finding vehicles in {:1.2f}".format(time.time() - start), "seconds")
+
+        if return_boxes and return_images:
+            return car_images, boxes
+        elif return_images:
+            return car_images
+
+        return boxes
 
 
 if __name__ == '__main__':
-    pipeline = VehicleDetectionPipline()
+    pipeline = VehicleDetectionPipeline()
     pipeline.load_data(vehicle_data_path="vehicles/**/*.png", nonvehicle_data_path="non-vehicles/**/*.png")
-    pipeline.extract_features(size=(16, 16), colorspace='YCrCb')
+    pipeline.extract_features()
     pipeline.train_classifier(test_size=0.25)
+
+    img = cv2.imread('project_video_images/frame62790.jpg')
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    car_boxes = pipeline.detect_vehicles(img)
+    print("Found", len(car_boxes), "cars.")

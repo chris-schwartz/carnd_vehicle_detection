@@ -74,25 +74,41 @@ class DataLoader:
         return image_data
 
 
-class FeatureExtractor(Thread):
+class FeatureExtractionParams:
+    """
+    This class is used to provide a single place to define all the feature extraction parameters used throughout
+    this project.
+    """
+
+    def __init__(self):
+        self.colorspace = 'YCrCb'
+        self.size = (32, 32)
+        self.orientation = 12
+        self.pix_per_cells = 8
+        self.bin_count = 24
+        self.cells_per_block = 2
+        self.use_hog = True
+        self.use_bin_spatial = True
+        self.use_color_hist = True
+
+
+class FeatureExtractor:
     """Class responsible for extracting training features from an image."""
 
-    def __init__(self, colorspace='RGB', spatial_size=(32, 32), hist_bins=32,
-                 orientations=9, hog_pixels_per_cell=8, hog_cells_per_block=2,
-                 feature_vector_hog=True, use_hog=True, use_bin_spatial=True, use_color_hist=True):
-        Thread.__init__(self)
+    def __init__(self, params=FeatureExtractionParams(), feature_vector_hog=True):
+
         self.features = []
 
-        self.colorspace = colorspace
-        self.spatial_size = spatial_size
-        self.hist_bins = hist_bins
-        self.orientations = orientations
-        self.hog_pixels_per_cell = hog_pixels_per_cell
-        self.hog_cells_per_block = hog_cells_per_block
+        self.colorspace = params.colorspace
+        self.spatial_size = params.size
+        self.hist_bins = params.bin_count
+        self.orientations = params.orientation
+        self.hog_pixels_per_cell = params.pix_per_cells
+        self.hog_cells_per_block = params.cells_per_block
         self.feature_vector_hog = feature_vector_hog
-        self.use_hog = use_hog
-        self.use_bin_spatial = use_bin_spatial
-        self.use_color_hist = use_color_hist
+        self.use_hog = params.use_hog
+        self.use_bin_spatial = params.use_bin_spatial
+        self.use_color_hist = params.use_color_hist
 
     def get_features(self, feature_images):
         """
@@ -140,7 +156,7 @@ class FeatureExtractor(Thread):
         return features
 
     @staticmethod
-    def color_hist(img, nbins=32):
+    def color_hist(img, nbins=32, visualize=False):
         """Returns color features for image"""
 
         # Compute the histogram of the image channels separately
@@ -148,24 +164,26 @@ class FeatureExtractor(Thread):
         ch2_hist = np.histogram(img[:, :, 1], bins=nbins)
         ch3_hist = np.histogram(img[:, :, 2], bins=nbins)
 
-        # Generating bin centers
-        bin_edges = ch1_hist[1]
-        bin_centers = (bin_edges[1:] + bin_edges[0:len(bin_edges) - 1]) / 2
-
         # Concatenate the histograms into a single feature vector
         hist_features = np.concatenate((ch1_hist[0], ch2_hist[0], ch3_hist[0]))
+
+        if visualize:
+            # Generating bin centers
+            bin_edges = ch1_hist[1]
+            bin_centers = (bin_edges[1:] + bin_edges[0:len(bin_edges) - 1]) / 2
+            return ch1_hist, ch2_hist, ch3_hist, bin_centers, hist_features
 
         # Return the individual histograms, bin_centers and feature vector
         return hist_features
 
     @staticmethod
-    def visualize_hog_features(img, orientations=9, pixels_per_cell=8, cells_per_block=2, feature_vector=True):
+    def visualize_hog_features(img, orientations=9, pixels_per_cell=8, cells_per_block=2):
         """Method used to view HOG features for an image"""
 
         features, hog_image = hog(img, orientations=orientations,
                                   pixels_per_cell=(pixels_per_cell, pixels_per_cell),
                                   cells_per_block=(cells_per_block, cells_per_block), transform_sqrt=False,
-                                  visualise=True, feature_vector=False)
+                                  visualise=True, feature_vector=True)
         return features, hog_image
 
     @staticmethod

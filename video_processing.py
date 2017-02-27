@@ -2,12 +2,18 @@ import numpy as np
 from moviepy.editor import VideoFileClip
 import cv2
 
+
 class VideoProcessor:
-    def __init__(self, trained_pipeline, frames_between_processing=1):
+    """
+    This class generates uses a trained vehicle detection pipeline to detect images in an existing video and
+    draws bounding boxes around each detected vehicle.
+    """
+
+    def __init__(self, trained_pipeline, frames_between_updates=1):
         self.pipeline = trained_pipeline
         self.last_labeled_boxes = []
         self.current_frame_number = 0
-        self.frames_between_processing = frames_between_processing
+        self.frames_between_processing = frames_between_updates
 
     @staticmethod
     def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
@@ -26,7 +32,6 @@ class VideoProcessor:
 
     def process_frame(self, frame):
         """ Draws boxes around detected cars for a single frame of video """
-        out_img = frame
 
         # update labeled boxes every x frames
         if self.current_frame_number % self.frames_between_processing == 0:
@@ -41,6 +46,10 @@ class VideoProcessor:
         return out_img
 
     def process_video(self, src_path, dest_path):
+        """
+        This method detects vehicles in an existing video, draws bounding boxes around each detected vehicle and
+        saves the output to a new video file.
+        """
         # prevent pipeline from preventing stats when processing frame
         pipeline_verbosity = self.pipeline.verbose
         self.pipeline.set_verbose(False)

@@ -1,18 +1,19 @@
 import time
-
 import cv2
 
-from features import DataLoader, SupportVectorClassifier, ImageSampler, HeatMapFilter
-from features import FeatureExtractor
-from multiprocessing import Process
-import numpy as np
+from detection_components import DataLoader, SupportVectorClassifier, ImageSampler, HeatMapFilter
+from detection_components import FeatureExtractor
 
 
 class FeatureExtractionParams:
+    """
+    This class is used to provide a single place to define all the feature extraction parameters used throughout
+    this project.
+    """
     def __init__(self):
         self.colorspace = 'YCrCb'
         self.size = (32, 32)
-        self.orientation = 12 # 9
+        self.orientation = 12  # 9
         self.pix_per_cells = 8
         self.bin_count = 24  # 32
         self.cells_per_block = 2
@@ -22,6 +23,14 @@ class FeatureExtractionParams:
 
 
 class VehicleDetectionPipeline:
+    """
+    This class defines the main pipeline used to:
+        - load training images
+        - extract features from images
+        - train a classifier
+        - identify vehicles in an image using the trained classifer
+    """
+
     def __init__(self, verbose=False):
         self.vehicle_features = []
         self.non_vehicle_features = []
@@ -46,10 +55,12 @@ class VehicleDetectionPipeline:
         self.heatmap_filter = HeatMapFilter()
 
     def set_verbose(self, verbose):
+        """Specify whether detailed information should be printed when running the pipeline."""
         self.verbose = verbose
 
-
     def load_training_data(self, vehicle_data_path, nonvehicle_data_path, use_pickle=True, reset_pickle=False):
+        """Loads vehicle and non vehicle images to be used for training the classifier."""
+
         start = time.time()
 
         loader = DataLoader()
@@ -64,6 +75,8 @@ class VehicleDetectionPipeline:
         return self.vehicle_data, self.non_vehicle_data, total
 
     def extract_features(self):
+        """ Extracts features for training from the loaded training data. """
+
         start = time.time()
         self.vehicle_features = self.feature_extractor.get_features(self.vehicle_data)
         self.non_vehicle_features = self.feature_extractor.get_features(self.non_vehicle_data)
@@ -72,6 +85,11 @@ class VehicleDetectionPipeline:
             print("Finished extracting features in", round(time.time() - start), "seconds")
 
     def train_classifier(self, test_size=0.25):
+        """
+        Trains a linear SVC for classifying vehicle images.  test_size indicates what percentage
+        of data will be dedicated to testing the classifier.
+        """
+
         start = time.time()
         self.classifier = SupportVectorClassifier(self.vehicle_features, self.non_vehicle_features)
         score = self.classifier.train_and_score(test_size=test_size)
@@ -80,6 +98,15 @@ class VehicleDetectionPipeline:
                   "seconds with {:3.3f}% accuracy.".format(score * 100.0))
 
     def find_windows_with_vehicles(self, image, return_boxes=True, return_images=False):
+        """
+        Splits an image up into subsamples an runs each sample through a trained classifier
+        to determine if the sample is a vehicle or not.
+
+        Will return the box coordinates of each sample with a vehicle in it, an image with
+        the positive sample boundaries drawn on them, or both based on the values of
+        return_boxes and return_images.
+        """
+
         start = time.time()
         car_images, boxes = [], []
 
@@ -113,6 +140,12 @@ class VehicleDetectionPipeline:
         return boxes
 
     def detect_vehicles(self, image, threshold, return_heatmap=False, return_boxes=True):
+        """
+        Detects all vehicles in a given image. Threshold specifies the number of samples that must
+        be exceeded before a sample is deemed a vehicle.  May return box coordinates for cars,
+        a heat map, or both based on specified value for return_heatmap and return_boxes
+        """
+
         boxes = self.find_windows_with_vehicles(image, return_boxes=True)
         self.heatmap_filter.update_heatmap(boxes, image.shape, threshold=threshold)
 

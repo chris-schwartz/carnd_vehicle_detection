@@ -239,17 +239,13 @@ class ImageSampler:
 
         # initialize windows, should be able to reuse as long as image shape is the same for each image
         windows = self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
-                                    xy_window=(32, 32), xy_overlap=(0.4, 0.4))
+                                    xy_window=(32, 32), xy_overlap=(0.5, 0.5))
         windows = self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
                                     xy_window=(48, 48), xy_overlap=(0.75, 0.75))
-        # windows += self.slide_window(img_shape, x_start_stop=[50, None], y_start_stop=[350, 600],
-        #                              xy_window=(125, 125), xy_overlap=(0.8, 0.8))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 600],
-                                     xy_window=(64, 64), xy_overlap=(0.75, 0.75))
+                                     xy_window=(64, 64), xy_overlap=(0.8, 0.8))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 700],
-                                     xy_window=(128, 128), xy_overlap=(0.70, 0.70))
-        # windows += self.slide_window(img_shape, x_start_stop=[None, None], y_start_stop=[350, 700],
-        #                              xy_window=(225, 225), xy_overlap=(0.85, 0.85))
+                                     xy_window=(128, 128), xy_overlap=(0.8, 0.8))
 
         self.windows = windows
 
@@ -307,21 +303,21 @@ class HeatMapFilter:
     def __init__(self):
         self.heatmap = None
 
-    def filter_boxes(self, image_shape, boxes, threshold=2):
-        # if self.heatmap is None:
-        self.heatmap = np.zeros(image_shape, dtype=np.float)
+    def update_heatmap(self, boxes, img_shape, threshold=2):
+        self.heatmap = np.zeros(img_shape, dtype=np.float)
 
         for box in boxes:
             self.heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1.0
 
         self.apply_threshold(threshold)
 
+    def get_filtered_boxes(self):
         labels = label(self.heatmap)
+        return self.get_labeled_boxes(labels)
 
-        labeled_boxes = self.get_labeled_boxes(labels)
-        # self.heatmap *= 0.25
-
-        return labeled_boxes
+    def get_heatmap(self):
+        max_value = np.max(self.heatmap)
+        return self.heatmap / max_value
 
     def apply_threshold(self, threshold=1):
         # Zero out pixels below the threshold

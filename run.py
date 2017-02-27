@@ -2,62 +2,84 @@ import time
 
 import cv2
 
-from features import DataLoader, SupportVectorClassifier, ImageSampler
+from features import DataLoader, SupportVectorClassifier, ImageSampler, HeatMapFilter
 from features import FeatureExtractor
 from multiprocessing import Process
 import numpy as np
 
 
-class VehicleDetectionPipeline:
+class FeatureExtractionParams:
     def __init__(self):
+        self.colorspace = 'YCrCb'
+        self.size = (32, 32)
+        self.orientation = 12 # 9
+        self.pix_per_cells = 8
+        self.bin_count = 24  # 32
+        self.cells_per_block = 2
+        self.use_hog = True
+        self.use_bin_spatial = True
+        self.use_color_hist = True
+
+
+class VehicleDetectionPipeline:
+    def __init__(self, verbose=False):
         self.vehicle_features = []
         self.non_vehicle_features = []
         self.vehicle_data = []
         self.non_vehicle_data = []
 
         self.classifier = None
+        self.verbose = verbose
 
         # feature extraction parameters
-        colorspace = 'YCrCb'
-        size = (16, 16)
-        orientation = 9
-        pix_per_cells = 8
-        bin_count = 32
-        cells_per_block = 2
-        use_hog = True
-        use_bin_spatial = True
-        use_color_hist = True
+        params = FeatureExtractionParams()
 
-        self.feature_extractor = FeatureExtractor(colorspace=colorspace,
-                                                  spatial_size=size,
-                                                  hist_bins=bin_count,
-                                                  orientations=orientation,
-                                                  hog_pixels_per_cell=pix_per_cells,
-                                                  hog_cells_per_block=cells_per_block,
-                                                  use_hog=use_hog,
-                                                  use_color_hist=use_color_hist,
-                                                  use_bin_spatial=use_bin_spatial)
+        self.feature_extractor = FeatureExtractor(colorspace=params.colorspace,
+                                                  spatial_size=params.size,
+                                                  hist_bins=params.bin_count,
+                                                  orientations=params.orientation,
+                                                  hog_pixels_per_cell=params.pix_per_cells,
+                                                  hog_cells_per_block=params.cells_per_block,
+                                                  use_hog=params.use_hog,
+                                                  use_color_hist=params.use_color_hist,
+                                                  use_bin_spatial=params.use_bin_spatial)
+        self.heatmap_filter = HeatMapFilter()
 
-    def load_data(self, vehicle_data_path, nonvehicle_data_path):
+    def set_verbose(self, verbose):
+        self.verbose = verbose
+
+
+    def load_training_data(self, vehicle_data_path, nonvehicle_data_path, use_pickle=True, reset_pickle=False):
+        start = time.time()
+
         loader = DataLoader()
-        self.vehicle_data = loader.load_data(path=vehicle_data_path)
-        self.non_vehicle_data = loader.load_data(path=nonvehicle_data_path)
+        self.vehicle_data = loader.load_data(path=vehicle_data_path, use_pickle=use_pickle, reset_pickle=reset_pickle)
+        self.non_vehicle_data = loader.load_data(path=nonvehicle_data_path, use_pickle=use_pickle,
+                                                 reset_pickle=reset_pickle)
+
+        total = len(self.vehicle_data) + len(self.non_vehicle_data)
+        if self.verbose:
+            print("Finished loading {:d} images in {:0.1f} seconds.".format(total, time.time() - start))
+
+        return self.vehicle_data, self.non_vehicle_data, total
 
     def extract_features(self):
         start = time.time()
         self.vehicle_features = self.feature_extractor.get_features(self.vehicle_data)
         self.non_vehicle_features = self.feature_extractor.get_features(self.non_vehicle_data)
 
-        print("Finished extracting features in", round(time.time() - start), "seconds")
+        if self.verbose:
+            print("Finished extracting features in", round(time.time() - start), "seconds")
 
     def train_classifier(self, test_size=0.25):
         start = time.time()
         self.classifier = SupportVectorClassifier(self.vehicle_features, self.non_vehicle_features)
         score = self.classifier.train_and_score(test_size=test_size)
-        print("Finished training in", round(time.time() - start),
-              "seconds with {:3.3f}% accuracy.".format(score * 100.0))
+        if self.verbose:
+            print("Finished training in", round(time.time() - start),
+                  "seconds with {:3.3f}% accuracy.".format(score * 100.0))
 
-    def detect_vehicles(self, image, return_boxes=True, return_images=False):
+    def find_windows_with_vehicles(self, image, return_boxes=True, return_images=False):
         start = time.time()
         car_images, boxes = [], []
 
@@ -79,7 +101,9 @@ class VehicleDetectionPipeline:
                 if return_boxes:
                     boxes.append(windows[idx])
 
-        print("Finished finding vehicles in {:1.2f}".format(time.time() - start), "seconds")
+        if self.verbose:
+            count = max(len(boxes), len(car_images))
+            print("Detected {:d} windows with vehicles in {:1.1f} seconds.".format(count, time.time() - start))
 
         if return_boxes and return_images:
             return car_images, boxes
@@ -88,10 +112,21 @@ class VehicleDetectionPipeline:
 
         return boxes
 
+    def detect_vehicles(self, image, threshold, return_heatmap=False, return_boxes=True):
+        boxes = self.find_windows_with_vehicles(image, return_boxes=True)
+        self.heatmap_filter.update_heatmap(boxes, image.shape, threshold=threshold)
+
+        if return_boxes and return_heatmap:
+            return self.heatmap_filter.get_filtered_boxes(), self.heatmap_filter.get_heatmap()
+        elif return_heatmap:
+            return self.heatmap_filter.get_heatmap()
+
+        return self.heatmap_filter.get_filtered_boxes()
+
 
 if __name__ == '__main__':
     pipeline = VehicleDetectionPipeline()
-    pipeline.load_data(vehicle_data_path="vehicles/**/*.png", nonvehicle_data_path="non-vehicles/**/*.png")
+    pipeline.load_training_data(vehicle_data_path="vehicles/**/*.png", nonvehicle_data_path="non-vehicles/**/*.png")
     pipeline.extract_features()
     pipeline.train_classifier(test_size=0.25)
 

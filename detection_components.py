@@ -14,6 +14,25 @@ from sklearn.utils import shuffle
 from sklearn.svm import LinearSVC
 
 
+class PipelineParameters:
+    """
+    This class is used to provide a single place to define all the feature extraction parameters used throughout
+    this project.
+    """
+
+    def __init__(self):
+        self.colorspace = 'YCrCb'
+        self.size = (32, 32)
+        self.orientation = 12
+        self.pix_per_cells = 6 #8
+        self.bin_count = 24
+        self.cells_per_block = 2
+        self.use_hog = True
+        self.use_bin_spatial = True
+        self.use_color_hist = True
+
+        self.filter_threshold = 2
+
 class DataLoader:
     """Class responsible for loading data and can cache loaded data into a pickle file for quicker access later."""
 
@@ -74,28 +93,11 @@ class DataLoader:
         return image_data
 
 
-class FeatureExtractionParams:
-    """
-    This class is used to provide a single place to define all the feature extraction parameters used throughout
-    this project.
-    """
-
-    def __init__(self):
-        self.colorspace = 'YCrCb'
-        self.size = (32, 32)
-        self.orientation = 12
-        self.pix_per_cells = 8
-        self.bin_count = 24
-        self.cells_per_block = 2
-        self.use_hog = True
-        self.use_bin_spatial = True
-        self.use_color_hist = True
-
 
 class FeatureExtractor:
     """Class responsible for extracting training features from an image."""
 
-    def __init__(self, params=FeatureExtractionParams(), feature_vector_hog=True):
+    def __init__(self, params=PipelineParameters(), feature_vector_hog=True):
 
         self.features = []
 
@@ -273,9 +275,9 @@ class ImageSampler:
 
         # initialize windows, should be able to reuse as long as image shape is the same for each image
         windows = self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
-                                    xy_window=(32, 32), xy_overlap=(0.5, 0.5))
+                                    xy_window=(32, 32), xy_overlap=(0.6, 0.6))
         windows = self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
-                                    xy_window=(48, 48), xy_overlap=(0.75, 0.75))
+                                    xy_window=(48, 48), xy_overlap=(0.8, 0.8))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 600],
                                      xy_window=(64, 64), xy_overlap=(0.8, 0.8))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 700],

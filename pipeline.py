@@ -1,7 +1,7 @@
 import time
 
 from detection_components import DataLoader, SupportVectorClassifier, ImageSampler, HeatMapFilter,FeatureExtractor, \
-    FeatureExtractionParams
+    PipelineParameters
 from video_processing import VideoProcessor
 
 
@@ -24,7 +24,7 @@ class VehicleDetectionPipeline:
         self.verbose = verbose
 
         # feature extraction parameters
-        params = FeatureExtractionParams()
+        params = PipelineParameters()
         self.feature_extractor = FeatureExtractor(params=params)
 
         self.heatmap_filter = HeatMapFilter()
@@ -146,5 +146,5 @@ if __name__ == '__main__':
 
     # apply pipeline to detect videos in short test video
     print("Using trained pipeline to generate new video.")
-    video_processor = VideoProcessor(pipeline, frames_between_updates=15)
-    video_processor.process_video("test_video.mp4", "processed_test_video.mp4")
+    video_processor = VideoProcessor(pipeline, frames_between_updates=5)
+    video_processor.process_video("project_video.mp4", "longer_shot.mp4")

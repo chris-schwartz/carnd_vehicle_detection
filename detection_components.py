@@ -24,7 +24,7 @@ class PipelineParameters:
         self.colorspace = 'YCrCb'
         self.size = (32, 32)
         self.orientation = 12
-        self.pix_per_cells = 6 #8
+        self.pix_per_cells = 6
         self.bin_count = 24
         self.cells_per_block = 2
         self.use_hog = True
@@ -32,6 +32,7 @@ class PipelineParameters:
         self.use_color_hist = True
 
         self.filter_threshold = 2
+
 
 class DataLoader:
     """Class responsible for loading data and can cache loaded data into a pickle file for quicker access later."""
@@ -91,7 +92,6 @@ class DataLoader:
             image_data.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
         return image_data
-
 
 
 class FeatureExtractor:
@@ -276,8 +276,8 @@ class ImageSampler:
         # initialize windows, should be able to reuse as long as image shape is the same for each image
         windows = self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
                                     xy_window=(32, 32), xy_overlap=(0.6, 0.6))
-        windows = self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
-                                    xy_window=(48, 48), xy_overlap=(0.8, 0.8))
+        windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
+                                     xy_window=(48, 48), xy_overlap=(0.8, 0.8))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 600],
                                      xy_window=(64, 64), xy_overlap=(0.8, 0.8))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 700],
@@ -286,14 +286,6 @@ class ImageSampler:
         self.windows = windows
 
     def sample_image(self, img, sample_shape=(64, 64)):
-        samples = []
-        for window in self.windows:
-            samples_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], sample_shape)
-            samples.append(samples_img)
-
-        return samples, self.windows
-
-    def hog_samples(self, img, hog_params, sample_shape=(64, 64)):
         samples = []
         for window in self.windows:
             samples_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], sample_shape)

@@ -2,6 +2,8 @@
 # Vehicle Detection and Tracking
 This project implements a pipeline that can be used for detecting and tracking vehicles within a video stream.  Detection and tracking is performed by training a classifier and using that classifier to detect vehicles within recorded samples of dashboard camera footage.  An approach similar to this may prove useful for using video as an input for vehicle collision systems in autonomous vehicles.
 
+![png](output_images/sample.png)
+
 # Contents
 
 Below is a list of all the files created and used for this project with a brief description of what is contained in each.
@@ -97,7 +99,7 @@ Looking at the FeatureExtractor class, you will notice there are three feature "
 
 ### Spatial Features
  
-The first feature is created by unraveling the pixel values within a chosen colorspace.  Since the ordering of the pixels is maintained, this preserves spatial information about the image.  To determine the best colorspace to use each of the following colorspaces were evaluated:
+The first feature is created by resizing the image to a 32x32 image and unraveling the pixel values within a chosen colorspace.  Since the ordering of the pixels is maintained, this preserves spatial information about the image.  To determine the best colorspace to use, each of the following colorspaces were evaluated:
 - RGB
 - HSV
 - LUV
@@ -108,30 +110,29 @@ The first feature is created by unraveling the pixel values within a chosen colo
 Evaluation included training a classifier where the only feature was the pixel values from that colorspace.  The YCrCb colorspace proved to have the greatest accuracy and was chosen for this reason.  Each channel of the image in this colorspace is shown below.
 
 
-
-
-
 ![png](output_images/output_9_0.png)
 
 
 ### Color Features
-The next feature captures only information about color.  Again, the colorspace used is YCrCb.  Colors for each pixel are grouped together into bins across each channel.  This provides a color "signature" for the image independent of spatial constraints.  The number of bins used in the pipeline was 24.  This proved to be enough to maintain an accuracy of over 99% when combined with the other features without drastically impacting performance during training or vehicle detection.  
+The next feature captures only information about color.  Again, the colorspace used is YCrCb and the image resolution is 32x32.  Colors for each pixel are grouped together into bins across each channel.  This provides a color "signature" for the image independent of spatial constraints.  The number of bins used in the pipeline was 24.  This proved to be enough to maintain an accuracy of over 99% when combined with the other features without drastically impacting performance during training or vehicle detection.  
 
 
 ![png](output_images/output_11_0.png)
 
 
 ### Histogram Of Gradients (HOG) Features
-The last and perhaps most interesting feature used is a histogram of oriented gradients (HOG). This feature is similar to the way we captured color features, but instead of colors it uses magnitudes of gradients.  To acheive this, a sample image is broken up into cells.  For each cell, a histogram of gradient magnitudes is computed using a specified number of orientations.  When summed up across all cells, this provides a signature for the shape contained within the sample.
+The last and perhaps most interesting feature used is a histogram of oriented gradients (HOG). This feature is similar to the way we captured color features, but instead of colors it uses magnitudes of gradients.  To acheive this, a sample image is broken up into cells.  
 
-The scikit-image package contains a `hog()` method was used to extract this features.  This method takes in a single channel image and parameters for the number of orientations, pixels per cell and cells per block.
+For each cell, a histogram of gradient magnitudes is computed using a specified number of orientations.  When summed up across all cells, this provides a signature for the shape contained within the sample.
+
+The scikit-image package contains a `hog()` method was used to extract these features.  This method takes in a single channel image and parameters specifying the number of orientations, pixels per cell and cells per block.
 
 ### HOG Parameter Selection
 Some experimentaion was performed to determine which values should be used for the HOG parameters.  The first experiment was to determine a color space to use.  
 
 The approach to determine the colorspace was to train a classifier using HOG features extracted from a number of different colorspaces.  Fewer colorspaces were experimented with as it turned out to take much longer to train/evaluate HOG features than it did color features.  The colorspaces evaluated were RGB, HSV, HLS, and YCrCb.  Again, YCrCb seemed to perform very well and was chosen.
 
-The next parameter was the number of orientations used in each histogram.  Initially, nine was arbitrarily chosen and allowed me to get over 99% accuracy when training.  However, when I began performing vehicle detection on video inputs, I experimented with setting the orientation to 12.  This seemed to provide better results.
+The next parameter was the number of orientations used in each histogram.  Initially, nine was arbitrarily chosen and allowed me to get over 99% accuracy when training.  However, while performing vehicle detection on the sample video, I experimented with setting the orientation to 12.  This seemed to provide better results.
 
 The pixels per cells was initially chosen to be eight.  This value was changed to 6 and then evaluated.  While this did increase the the feature size and the training time, a good amount of accuracy was gained as well so it was left at this value.
 
@@ -140,7 +141,7 @@ HOG features were taken across all channels of the YCrCb colorspace.  Even thoug
 The final parameters used to extract HOG features were:
 - Number of orientations: 12
 - Cells per block: 2x2
-- Pixels per cell: 8x8
+- Pixels per cell: 6x6
 - Colorspace: YCrCb
 - Channel: ALL
 
@@ -177,14 +178,15 @@ print("Non Vehicle Vector Shape:", np.asarray(nonvehicle_features).shape)
 
 # Training The Classifier
 
-After all the features are extracted, the next step is to train a classifier.  The `SupportVectorClassifier` class in *detection_components.py* is used by the pipeline to handle training and providing predictions.  This class uses the Linear SVC classifier from sklearn.  After some intial testing, it was clear that the Linear SVC classifier was able to acheive good accuracy in a very small amount of time.  
+After all the features are extracted, the next step is to train a classifier.  The `SupportVectorClassifier` class in *detection_components.py* is used by the pipeline to handle training and provide predictions.  This class uses the Linear SVC classifier from scikit-learn.  
+
+After intial testing, it was clear that the Linear SVC classifier was able to acheive good accuracy in a very small amount of time.  
 
 The `SupportVectorClassifier` normalizes all features using scikit-learn's `StandardScaler` class.  After normalizing and combining the vehicle and non vehicle features the order of feature vector is randomly shuffled.
 
 Using the extracted features described earlier with the Linear SVC classifier consistently produced > 99% accuracy with 25% of the features being witheld from the training set for validation.
 
-The code to train the pipeline with 25% of the training data withheld for validation is shown below.  The resulting accuracy score is shown as well.
-
+The code to train the pipeline with 25% of the training data withheld for validation is shown below.  The  training time and resulting accuracy score is shown as well.
 
 ```python
 pipeline.train_classifier(test_size=0.25)
@@ -195,17 +197,17 @@ pipeline.train_classifier(test_size=0.25)
 
 # Detecting Vehicles
 
-After a classifier has been trained, the next step is to figure out where vehicles are located in an image.  To acheive this different parts of the image must be sampled and since vehicles near by appear much larger than those in the distance, the sampling size would need to vary as well.
+After a classifier has been trained, the next step is to figure out where vehicles are located in an image.  To acheive this different parts of the image must be sampled and since vehicles nearby appear much larger than those in the distance, the sampling size would need to vary as well.
 
 To accomplish this, a sliding windows technique was used.  Samples were only extracted from the lower half of the image, since the upper half never contains vehicles.  
 
 The sliding window technique described here is implemented in the `ImageSampler` class found in *detection_components.py*.
 
-To try to get an estimate of what the size of each sampling windows should be, a large number of frames from the project video were extracted and saved.  Several of these images were viewed in an image editor and the size of a box required to bound the vehicles at various distances from the camera was noted.  
+To try to get an estimate of what the size of each sampling windows should be, a large number of frames from the project video were extracted and saved.  Several of these images were viewed in an image editor.  From viewing within the image editor the size of a box required to bound the vehicles at various distances from the camera was estimated.  
 
 The first implementation used 3 different sizes of windows.  These inital window sizes were 64x64, 128x128, and 256x256.  The 64x64 windows overlapped 50% of their neighboring windows, the 128x128 windows overlapped 65% of their neighbors, and the 256x256 windows overlapped 75% of their neighboring windows.
 
-After testing on a number of project video images, it became clear that this was not going to work well enough.  After testing out a number of various resolution sizes and testing on the project videos, I soon discovered that the sampling did better at detecting parts of the car and more sampling sizes at smaller resolutions provided better results.  The final window sampling used was as follows:
+After testing on a number of project video images, it became clear that this was not going to work well enough.  After testing out a number of various resolution sizes and testing on the project videos, I soon discovered that more sampling sizes at smaller resolutions provided better results.  The final window sampling used was as follows:
 
 - A 32x32 sample size with 60% overlap
 - A 48x48 sample size with 80% overlap
@@ -218,7 +220,6 @@ Below the 128x128 windows samples are shown overlayed on top of a test image.
 ![png](output_images/output_19_0.png)
 
 
-
 ![png](output_images/output_19_1.png)
 
 
@@ -228,8 +229,7 @@ When sampling many windows from an image and running each sample through a class
 
 The `HeatMapFilter` class implements a "heat map" approach.  An empty array is created that is the same size as the source image.  For each window that tested positive for a vehicle, the window area of the array is incremented by one.  This produces a heat map where the higher concentration of detected images is "hotter".  The heat map is then used with Scipy's `label()` method to return bounding boxes where car instances are expected.
 
-Occasionaly, images that were not vehicles were predicted to be vehicles.  To prevent reduce these false positives, after a heat map has been generated, a "hotness" threshold was established.  Areas where less samples were detected would then be discarded.  A threshold of 2 samples seemed to perform well at reducing false positives while continuing to accurately detect vehiceles.
-
+Occasionaly, images that were not vehicles were predicted to be vehicles.  To reduce these false positives, after the heat map has been generated a "hotness" threshold was established.  Areas where less samples were detected would then be discarded.  A threshold of 2 samples seemed to perform well at reducing false positives while continuing to accurately detect vehiceles.
 
 Below is the code that was used to evaluate how well the sampling, heat mapping, and threshold filtering was performing and some results of the current implementation.  The images below show the final bounding box for the vehicle on the left and a heat map created from all the positive samples received using the sliding window approach.
 
@@ -246,30 +246,23 @@ for img_number in image_numbers:
 
 ```
 
+
     Detected 11 windows with vehicles in 29.7 seconds.
-
-
 
 ![png](output_images/output_21_1.png)
 
 
     Detected 54 windows with vehicles in 28.9 seconds.
 
-
-
 ![png](output_images/output_21_3.png)
 
 
     Detected 19 windows with vehicles in 28.2 seconds.
 
-
-
 ![png](output_images/output_21_5.png)
 
 
     Detected 57 windows with vehicles in 28.1 seconds.
-
-
 
 ![png](output_images/output_21_7.png)
 

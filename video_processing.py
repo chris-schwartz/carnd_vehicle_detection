@@ -1,6 +1,6 @@
+import cv2
 import numpy as np
 from moviepy.editor import VideoFileClip
-import cv2
 
 from detection_components import PipelineParameters
 
@@ -37,7 +37,7 @@ class VideoProcessor:
         params = PipelineParameters()
         # update labeled boxes every x frames
         if self.current_frame_number % self.frames_between_processing == 0:
-            self.last_labeled_boxes = self.pipeline.detect_vehicles(frame, threshold=params.filter_threshold)
+            self.last_labeled_boxes = self.pipeline.detect_vehicles(frame)
 
         # draw boxes
         out_img = self.draw_boxes(frame, self.last_labeled_boxes)

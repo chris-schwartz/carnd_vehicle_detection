@@ -1,17 +1,14 @@
-from threading import Thread
-
-import numpy as np
-import cv2
 import glob
-import pickle
 import os
+import pickle
 
+import cv2
+import numpy as np
 from skimage.feature import hog
-
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
+from sklearn.utils import shuffle
 
 
 class PipelineParameters:
@@ -31,7 +28,8 @@ class PipelineParameters:
         self.use_bin_spatial = True
         self.use_color_hist = True
 
-        self.filter_threshold = 2
+        self.filter_threshold = 4
+        self.decay_rate = 0.66
 
 
 class DataLoader:
@@ -275,13 +273,13 @@ class ImageSampler:
 
         # initialize windows, should be able to reuse as long as image shape is the same for each image
         windows = self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
-                                    xy_window=(32, 32), xy_overlap=(0.6, 0.6))
-        windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[375, 550],
-                                     xy_window=(48, 48), xy_overlap=(0.8, 0.8))
+                                    xy_window=(48, 48), xy_overlap=(0.6, 0.6))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 600],
                                      xy_window=(64, 64), xy_overlap=(0.8, 0.8))
         windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 700],
                                      xy_window=(128, 128), xy_overlap=(0.8, 0.8))
+        windows += self.slide_window(img_shape, x_start_stop=[200, None], y_start_stop=[400, 700],
+                                     xy_window=(150, 150), xy_overlap=(0.8, 0.8))
 
         self.windows = windows
 
@@ -342,8 +340,11 @@ class HeatMapFilter:
     def __init__(self):
         self.heatmap = None
 
-    def update_heatmap(self, boxes, img_shape, threshold=2):
-        self.heatmap = np.zeros(img_shape, dtype=np.float)
+    def update_heatmap(self, boxes, img_shape, threshold=2, decay_rate=0):
+        if self.heatmap == None:
+            self.heatmap = np.zeros(img_shape, dtype=np.float)
+        else:
+            self.heatmap *= decay_rate
 
         for box in boxes:
             self.heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1.0

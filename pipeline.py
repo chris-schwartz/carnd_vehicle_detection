@@ -1,5 +1,7 @@
 import time
 
+import numpy as np
+
 from detection_components import DataLoader, SupportVectorClassifier, ImageSampler, HeatMapFilter,FeatureExtractor, \
     PipelineParameters
 from video_processing import VideoProcessor
@@ -24,8 +26,8 @@ class VehicleDetectionPipeline:
         self.verbose = verbose
 
         # feature extraction parameters
-        params = PipelineParameters()
-        self.feature_extractor = FeatureExtractor(params=params)
+        self.params = PipelineParameters()
+        self.feature_extractor = FeatureExtractor(params=self.params)
 
         self.heatmap_filter = HeatMapFilter()
 
@@ -58,6 +60,8 @@ class VehicleDetectionPipeline:
 
         if self.verbose:
             print("Finished extracting features in", round(time.time() - start), "seconds")
+            print("Vehicle Features Shape:", np.asarray(self.vehicle_features).shape)
+            print("Non Vehicle Features Shape:", np.asarray(self.non_vehicle_features).shape)
 
     def train_classifier(self, test_size=0.25):
         """
@@ -114,7 +118,7 @@ class VehicleDetectionPipeline:
 
         return boxes
 
-    def detect_vehicles(self, image, threshold, return_heatmap=False, return_boxes=True):
+    def detect_vehicles(self, image, return_heatmap=False, return_boxes=True):
         """
         Detects all vehicles in a given image. Threshold specifies the number of samples that must
         be exceeded before a sample is deemed a vehicle.  May return box coordinates for cars,
@@ -122,7 +126,8 @@ class VehicleDetectionPipeline:
         """
 
         boxes = self.find_windows_with_vehicles(image, return_boxes=True)
-        self.heatmap_filter.update_heatmap(boxes, image.shape, threshold=threshold)
+        self.heatmap_filter.update_heatmap(boxes, image.shape, threshold=self.params.filter_threshold,
+                                           decay_rate=self.params.decay_rate)
 
         if return_boxes and return_heatmap:
             return self.heatmap_filter.get_filtered_boxes(), self.heatmap_filter.get_heatmap()
@@ -146,5 +151,5 @@ if __name__ == '__main__':
 
     # apply pipeline to detect videos in short test video
     print("Using trained pipeline to generate new video.")
-    video_processor = VideoProcessor(pipeline, frames_between_updates=5)
+    video_processor = VideoProcessor(pipeline, frames_between_updates=2)
     video_processor.process_video("project_video.mp4", "longer_shot.mp4")
